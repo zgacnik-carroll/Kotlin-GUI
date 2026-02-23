@@ -96,9 +96,19 @@ class MazeGUI : JFrame() {
         private var playerRow = 1
         private var playerCol = 1
 
+        private val quitButton = JButton("Quit")
+
         init {
             isFocusable = true
+            layout = null
             setupKeyBindings()
+
+            quitButton.addActionListener {
+                cards.show(container, "LEVELS")
+                pack()
+            }
+
+            add(quitButton)
         }
 
         fun loadLevel(level: Array<CharArray>) {
@@ -107,6 +117,15 @@ class MazeGUI : JFrame() {
             playerCol = 1
             revalidate()
             repaint()
+        }
+
+        override fun doLayout() {
+            super.doLayout()
+
+            if (::maze.isInitialized) {
+                val mazeWidth = maze[0].size * tileSize
+                quitButton.setBounds(mazeWidth - 100, 10, 90, 30)
+            }
         }
 
         private fun setupKeyBindings() {
