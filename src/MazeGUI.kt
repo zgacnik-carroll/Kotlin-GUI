@@ -264,8 +264,8 @@ class MazeGUI : JFrame() {
         private fun finish() {
             val time = (System.currentTimeMillis() - startTime) / 1000
             val stars = when {
-                time <= 30 -> "★★★"
-                time <= 60 -> "★★"
+                time < 30 -> "★★★"
+                time < 60 -> "★★"
                 else -> "★"
             }
 
