@@ -30,17 +30,13 @@ class MazeGUI : JFrame() {
         defaultCloseOperation = EXIT_ON_CLOSE
         isResizable = false
 
-        // Register application screens with CardLayout
+        // Register screens
         container.add(createTitlePanel(), "TITLE")
         container.add(createLevelPanel(), "LEVELS")
         container.add(gamePanel, "GAME")
 
         add(container)
-
-        // Pack sizes frame to preferred size of current screen
         pack()
-
-        // Center window on screen
         setLocationRelativeTo(null)
 
         // Show title screen first
@@ -54,13 +50,8 @@ class MazeGUI : JFrame() {
      * @return Styled JButton instance
      */
     private fun btn(t: String) = JButton(t).apply {
-        // Apply consistent typography
         font = Font("Segoe UI", Font.BOLD, 18)
-
-        // Ensure uniform button sizing
         preferredSize = Dimension(220, 45)
-
-        // Center alignment for BoxLayout containers
         alignmentX = Component.CENTER_ALIGNMENT
     }
 
@@ -71,8 +62,6 @@ class MazeGUI : JFrame() {
      */
     private fun createTitlePanel(): JPanel {
         val p = JPanel()
-
-        // Vertical layout allows stacked title, description, and button
         p.layout = BoxLayout(p, BoxLayout.Y_AXIS)
 
         val title = JLabel("MAZE ESCAPE").apply {
@@ -80,7 +69,6 @@ class MazeGUI : JFrame() {
             alignmentX = Component.CENTER_ALIGNMENT
         }
 
-        // HTML formatting enables rich text instructions inside JLabel
         val description = JLabel("""
             <html>
             <div style='margin-left:20px;'><b>Instructions:</b></div>
@@ -90,17 +78,15 @@ class MazeGUI : JFrame() {
             <li>Reach the finish (red square)</li>
             </ul>
             </html>
-            """.trimIndent())
+        """.trimIndent())
 
         description.alignmentX = Component.CENTER_ALIGNMENT
         description.font = Font("Segoe UI", Font.PLAIN, 24)
 
         val start = btn("Start")
-
-        // Navigate to level selection screen
         start.addActionListener { cards.show(container, "LEVELS") }
 
-        // Use vertical glue to center content
+        // Vertical layout composition
         p.add(Box.createVerticalGlue())
         p.add(title)
         p.add(description)
@@ -120,31 +106,26 @@ class MazeGUI : JFrame() {
         p.layout = BoxLayout(p, BoxLayout.Y_AXIS)
         p.add(Box.createVerticalGlue())
 
-        // Pre-generate fixed maze sizes for consistent difficulty progression
+        // Pre-generate fixed maze sizes for difficulty progression
         val levels = listOf(
             generateMaze(21, 11),
             generateMaze(25, 13),
             generateMaze(29, 15)
         )
 
-        // Create a button for each predefined level
+        // Create buttons dynamically for each level
         levels.forEachIndexed { i, lvl ->
             val b = btn("Level ${i + 1}")
-
-            // Load selected level and transition to gameplay screen
             b.addActionListener {
                 gamePanel.loadLevel(lvl, i + 1)
                 cards.show(container, "GAME")
-
-                // Resize frame based on maze dimensions
-                pack()
+                pack() // Resize window to maze size
             }
-
             p.add(b)
             p.add(Box.createRigidArea(Dimension(0, 10)))
         }
 
-        // Larger randomly generated maze acting as "endless" mode
+        // Larger maze for final challenge
         val endless = btn("Level 4")
         endless.addActionListener {
             gamePanel.loadLevel(generateMaze(35, 19), 99)
@@ -152,7 +133,6 @@ class MazeGUI : JFrame() {
             pack()
         }
 
-        // Exit button terminates JVM
         val exit = btn("Exit Game")
         exit.addActionListener { exitProcess(0) }
 
@@ -181,7 +161,7 @@ class MazeGUI : JFrame() {
         private var playerR = 1
         private var playerC = 1
 
-        /** Player interpolated position for animation */
+        /** Interpolated player position used for animation */
         private var px = 1.0
         private var py = 1.0
 
@@ -191,22 +171,20 @@ class MazeGUI : JFrame() {
         /** Level start timestamp for timer tracking */
         private var startTime = 0L
 
-        /** HUD components */
+        /** HUD labels */
         private val timerLabel = JLabel()
         private val levelLabel = JLabel()
 
-        /** Victory overlay panel */
+        /** Victory overlay */
         private val victory = JPanel()
 
-        /**
-         * Initializes gameplay panel UI and input bindings.
-         */
+        /** HUD buttons (stored so we can enable/disable them) */
+        private val restartBtn = JButton("Restart")
+        private val quitBtn = JButton("Quit")
+
         init {
             isFocusable = true
-
-            // OverlayLayout allows victory screen to sit above gameplay
             layout = OverlayLayout(this)
-
             createHUD()
             createVictory()
             setupKeys()
@@ -218,23 +196,15 @@ class MazeGUI : JFrame() {
          */
         private fun createHUD() {
             val hud = JPanel(FlowLayout(FlowLayout.LEFT))
-
-            // Transparent background ensures gameplay remains visible
             hud.isOpaque = false
 
-            val restart = JButton("Restart")
-            val quit = JButton("Quit")
-
-            // Reload current maze state
-            restart.addActionListener { loadLevel(maze, 0) }
-
-            // Return to level selection
-            quit.addActionListener { cards.show(container, "LEVELS") }
+            restartBtn.addActionListener { loadLevel(maze, 0) }
+            quitBtn.addActionListener { cards.show(container, "LEVELS") }
 
             hud.add(levelLabel)
             hud.add(timerLabel)
-            hud.add(restart)
-            hud.add(quit)
+            hud.add(restartBtn)
+            hud.add(quitBtn)
             add(hud)
         }
 
@@ -243,8 +213,6 @@ class MazeGUI : JFrame() {
          */
         private fun createVictory() {
             victory.layout = GridBagLayout()
-
-            // Semi-transparent overlay darkens gameplay
             victory.background = Color(0, 0, 0, 160)
             victory.isVisible = false
 
@@ -260,9 +228,10 @@ class MazeGUI : JFrame() {
             val levels = JButton("Level Select")
             val exit = JButton("Exit")
 
-            // Hide overlay and navigate back
             levels.addActionListener {
                 victory.isVisible = false
+                restartBtn.isEnabled = true
+                quitBtn.isEnabled = true
                 cards.show(container, "LEVELS")
             }
 
@@ -280,31 +249,24 @@ class MazeGUI : JFrame() {
 
         /**
          * Loads a new maze level and resets player state.
-         *
-         * @param level Maze grid
-         * @param num Level identifier
          */
         fun loadLevel(level: Array<CharArray>, num: Int) {
-            // Deep copy maze to prevent accidental mutation
             maze = level.map { it.copyOf() }.toTypedArray()
 
-            // Reset player position to maze entrance
+            // Reset player state
             playerR = 1
             playerC = 1
-
-            // Reset interpolated animation coordinates
             px = playerC.toDouble()
             py = playerR.toDouble()
-
             animating = false
             victory.isVisible = false
 
-            // Update HUD
+            // Re-enable HUD buttons
+            restartBtn.isEnabled = true
+            quitBtn.isEnabled = true
+
             levelLabel.text = "Level $num"
-
-            // Start timer
             startTime = System.currentTimeMillis()
-
             repaint()
             requestFocusInWindow()
         }
@@ -316,7 +278,6 @@ class MazeGUI : JFrame() {
             val im = getInputMap(WHEN_IN_FOCUSED_WINDOW)
             val am = actionMap
 
-            // Helper to bind key string to action
             fun bind(k: String, f: () -> Unit) {
                 im.put(KeyStroke.getKeyStroke(k), k)
                 am.put(k, object : AbstractAction() {
@@ -324,7 +285,6 @@ class MazeGUI : JFrame() {
                 })
             }
 
-            // Bind both WASD and arrow keys
             bind("W") { move(-1, 0) }
             bind("UP") { move(-1, 0) }
             bind("S") { move(1, 0) }
@@ -340,23 +300,17 @@ class MazeGUI : JFrame() {
          */
         @Deprecated("Deprecated in Java")
         override fun move(dr: Int, dc: Int) {
-            // Prevent overlapping animations
             if (animating) return
 
             val nr = playerR + dr
             val nc = playerC + dc
 
-            // Bounds checking
+            // Prevent out-of-bounds movement
             if (nr !in maze.indices || nc !in maze[0].indices) return
 
             when (maze[nr][nc]) {
-                // Wall collision feedback
                 '#' -> Toolkit.getDefaultToolkit().beep()
-
-                // Exit tile triggers completion
                 'E' -> finish()
-
-                // Valid movement
                 else -> animateMove(nr, nc)
             }
         }
@@ -375,19 +329,15 @@ class MazeGUI : JFrame() {
             val steps = 10
             var step = 0
 
-            // Timer drives interpolation at ~60 FPS
             val timer = Timer(16) {
                 step++
 
-                // Linear interpolation factor
+                // Linear interpolation for smooth motion
                 val t = step / steps.toDouble()
-
                 px = sx + (ex - sx) * t
                 py = sy + (ey - sy) * t
-
                 repaint()
 
-                // Finalize movement once animation completes
                 if (step >= steps) {
                     (it.source as Timer).stop()
                     playerR = nr
@@ -406,14 +356,12 @@ class MazeGUI : JFrame() {
         private fun finish() {
             val time = (System.currentTimeMillis() - startTime) / 1000
 
-            // Simple performance rating
             val stars = when {
                 time < 30 -> "★★★"
                 time < 60 -> "★★"
                 else -> "★"
             }
 
-            // Update overlay label dynamically
             (victory.components[0] as JPanel).components[0].let {
                 (it as JLabel).apply {
                     font = Font("Dialog", Font.BOLD, 18)
@@ -421,14 +369,15 @@ class MazeGUI : JFrame() {
                 }
             }
 
+            // Disable HUD interaction during victory overlay
+            restartBtn.isEnabled = false
+            quitBtn.isEnabled = false
+
             victory.isVisible = true
         }
 
         override fun getPreferredSize(): Dimension {
-            // Default size before maze loads
             if (!::maze.isInitialized) return Dimension(600, 400)
-
-            // Size derived from maze grid
             return Dimension(maze[0].size * tile, maze.size * tile)
         }
 
@@ -439,7 +388,6 @@ class MazeGUI : JFrame() {
             super.paintComponent(g)
             if (!::maze.isInitialized) return
 
-            // Update timer every repaint
             val time = (System.currentTimeMillis() - startTime) / 1000
             timerLabel.text = "Time: ${time}s"
 
@@ -456,7 +404,7 @@ class MazeGUI : JFrame() {
                     g2.fillRect(c * tile, r * tile, tile, tile)
                 }
 
-            // Player shadow for depth effect
+            // Player shadow
             g2.color = Color(0, 0, 0, 50)
             g2.fillOval((px * tile).toInt() + 3, (py * tile).toInt() + 3, tile, tile)
 
@@ -470,10 +418,8 @@ class MazeGUI : JFrame() {
      * Generates a perfect maze using randomized depth-first search.
      */
     private fun generateMaze(w: Int, h: Int): Array<CharArray> {
-        // Initialize grid filled with walls
         val maze = Array(h) { CharArray(w) { '#' } }
 
-        // DFS stack for backtracking
         val stack = mutableListOf(1 to 1)
         maze[1][1] = ' '
 
@@ -482,7 +428,6 @@ class MazeGUI : JFrame() {
         while (stack.isNotEmpty()) {
             val (r, c) = stack.last()
 
-            // Find unvisited neighbors two tiles away
             val neighbors = dirs.map { (dr, dc) -> r + dr to c + dc }
                 .filter { (nr, nc) ->
                     nr in 1 until h - 1 &&
@@ -490,11 +435,12 @@ class MazeGUI : JFrame() {
                             maze[nr][nc] == '#'
                 }
 
-            if (neighbors.isEmpty()) stack.removeLast()
-            else {
+            if (neighbors.isEmpty()) {
+                stack.removeLast()
+            } else {
                 val (nr, nc) = neighbors.random()
 
-                // Carve passage between current and neighbor
+                // Carve passage between cells
                 maze[(r + nr) / 2][(c + nc) / 2] = ' '
                 maze[nr][nc] = ' '
 
@@ -502,7 +448,7 @@ class MazeGUI : JFrame() {
             }
         }
 
-        // Place exit tile
+        // Place exit
         maze[h - 2][w - 2] = 'E'
         return maze
     }
