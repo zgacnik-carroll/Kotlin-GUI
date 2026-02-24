@@ -67,6 +67,7 @@ class MazeGUI : JFrame() {
     private fun createLevelPanel(): JPanel {
         val p = JPanel()
         p.layout = BoxLayout(p, BoxLayout.Y_AXIS)
+        p.add(Box.createVerticalGlue())
 
         val levels = listOf(
             generateMaze(21, 11),
@@ -85,16 +86,22 @@ class MazeGUI : JFrame() {
             p.add(Box.createRigidArea(Dimension(0, 10)))
         }
 
-        val endless = btn("Procedural Maze")
+        val endless = btn("Level 4")
         endless.addActionListener {
             gamePanel.loadLevel(generateMaze(35, 19), 99)
             cards.show(container, "GAME")
             pack()
         }
 
+        val exit = btn("Exit Game")
+        exit.addActionListener { exitProcess(0) }
+
         p.add(Box.createRigidArea(Dimension(0, 10)))
         p.add(endless)
+        p.add(Box.createRigidArea(Dimension(0, 20)))
+        p.add(exit)
         p.add(Box.createVerticalGlue())
+
         return p
     }
 
