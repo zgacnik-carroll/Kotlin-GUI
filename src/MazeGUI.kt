@@ -2,6 +2,7 @@ import java.awt.*
 import javax.swing.*
 import kotlin.system.exitProcess
 
+@Suppress("DEPRECATION")
 class MazeGUI : JFrame() {
 
     private val cards = CardLayout()
@@ -216,6 +217,7 @@ class MazeGUI : JFrame() {
             bind("RIGHT") { move(0, 1) }
         }
 
+        @Deprecated("Deprecated in Java")
         override fun move(dr: Int, dc: Int) {
             if (animating) return
 
