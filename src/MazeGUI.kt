@@ -6,7 +6,6 @@ class MazeGUI : JFrame() {
 
     private val cards = CardLayout()
     private val container = JPanel(cards)
-
     private val gamePanel = MazePanel()
 
     init {
@@ -14,268 +13,319 @@ class MazeGUI : JFrame() {
         defaultCloseOperation = EXIT_ON_CLOSE
         isResizable = false
 
-        val titlePanel = createTitlePanel()
-        val levelPanel = createLevelSelectPanel()
-
-        container.add(titlePanel, "TITLE")
-        container.add(levelPanel, "LEVELS")
+        container.add(createTitlePanel(), "TITLE")
+        container.add(createLevelPanel(), "LEVELS")
         container.add(gamePanel, "GAME")
 
         add(container)
         pack()
         setLocationRelativeTo(null)
-
         cards.show(container, "TITLE")
     }
 
-    private fun createTitlePanel(): JPanel {
-        val panel = JPanel()
-        panel.layout = BoxLayout(panel, BoxLayout.Y_AXIS)
+    private fun btn(t: String) = JButton(t).apply {
+        font = Font("Segoe UI", Font.BOLD, 18)
+        preferredSize = Dimension(220, 45)
+        alignmentX = Component.CENTER_ALIGNMENT
+    }
 
-        val title = JLabel("MAZE ESCAPE")
-        val description = JLabel(
-            """
-                <html>
-                <div style='margin-left:20px;'><b>Instructions:</b><br></div>
-                <ul>
-                <li>Move your player with WASD or the arrow keys</li>
-                <li>Avoid walls (black boxes)</li>
-                <li>Reach the exit (red block)</li>
-                </ul>
-                </html>""".trimIndent()
+    private fun createTitlePanel(): JPanel {
+        val p = JPanel()
+        p.layout = BoxLayout(p, BoxLayout.Y_AXIS)
+
+        val title = JLabel("MAZE ESCAPE").apply {
+            font = Font("Segoe UI", Font.BOLD, 50)
+            alignmentX = Component.CENTER_ALIGNMENT
+        }
+
+        val description = JLabel("""
+            <html>
+            <div style='margin-left:20px;'><b>Instructions:</b></div>
+            <ul>
+            <li>Move using WASD or arrow keys</li>
+            <li>Follow the white path</li>
+            <li>Reach the finish (red square)</li>
+            </ul>
+            </html>
+            """.trimIndent())
+
+        description.alignmentX = Component.CENTER_ALIGNMENT
+        description.font = Font("Segoe UI", Font.PLAIN, 24)
+
+        val start = btn("Start")
+        start.addActionListener { cards.show(container, "LEVELS") }
+
+        p.add(Box.createVerticalGlue())
+        p.add(title)
+        p.add(description)
+        p.add(Box.createRigidArea(Dimension(0, 30)))
+        p.add(start)
+        p.add(Box.createVerticalGlue())
+        return p
+    }
+
+    private fun createLevelPanel(): JPanel {
+        val p = JPanel()
+        p.layout = BoxLayout(p, BoxLayout.Y_AXIS)
+
+        val levels = listOf(
+            generateMaze(21, 11),
+            generateMaze(25, 13),
+            generateMaze(29, 15)
         )
 
-        title.font = Font("Segoe UI", Font.BOLD, 48)
-        title.alignmentX = Component.CENTER_ALIGNMENT
-        description.alignmentX = Component.CENTER_ALIGNMENT
-        description.font = Font("Segoe UI", Font.PLAIN, 20)
+        levels.forEachIndexed { i, lvl ->
+            val b = btn("Level ${i + 1}")
+            b.addActionListener {
+                gamePanel.loadLevel(lvl, i + 1)
+                cards.show(container, "GAME")
+                pack()
+            }
+            p.add(b)
+            p.add(Box.createRigidArea(Dimension(0, 10)))
+        }
 
-        val startButton = JButton("Start")
-        startButton.alignmentX = Component.CENTER_ALIGNMENT
-
-        startButton.addActionListener {
-            cards.show(container, "LEVELS")
+        val endless = btn("Procedural Maze")
+        endless.addActionListener {
+            gamePanel.loadLevel(generateMaze(35, 19), 99)
+            cards.show(container, "GAME")
             pack()
         }
 
-        panel.add(Box.createVerticalGlue())
-        panel.add(title)
-        panel.add(description)
-        panel.add(Box.createRigidArea(Dimension(0, 30)))
-        panel.add(startButton)
-        panel.add(Box.createVerticalGlue())
-
-        return panel
-    }
-
-    private fun createLevelSelectPanel(): JPanel {
-        val panel = JPanel(GridLayout(5, 1, 10, 10))
-        panel.border = BorderFactory.createEmptyBorder(40, 40, 40, 40)
-
-        val levels = listOf(level1(), level2(), level3(), level4(), level5())
-
-        for (i in levels.indices) {
-            val btn = JButton("Level ${i + 1}")
-            btn.addActionListener {
-                gamePanel.loadLevel(levels[i])
-                cards.show(container, "GAME")
-                pack()
-                gamePanel.requestFocusInWindow()
-            }
-            panel.add(btn)
-        }
-
-        return panel
+        p.add(Box.createRigidArea(Dimension(0, 10)))
+        p.add(endless)
+        p.add(Box.createVerticalGlue())
+        return p
     }
 
     inner class MazePanel : JPanel() {
 
-        private val tileSize = 30
+        private val tile = 28
         private lateinit var maze: Array<CharArray>
 
-        private var playerRow = 1
-        private var playerCol = 1
+        private var playerR = 1
+        private var playerC = 1
+        private var px = 1.0
+        private var py = 1.0
+        private var animating = false
 
-        private val quitButton = JButton("Quit")
+        private var startTime = 0L
+        private val timerLabel = JLabel()
+        private val levelLabel = JLabel()
+
+        private val victory = JPanel()
 
         init {
             isFocusable = true
-            layout = null
-            setupKeyBindings()
+            layout = OverlayLayout(this)
+            createHUD()
+            createVictory()
+            setupKeys()
+        }
 
-            quitButton.addActionListener {
+        private fun createHUD() {
+            val hud = JPanel(FlowLayout(FlowLayout.LEFT))
+            hud.isOpaque = false
+
+            val restart = JButton("Restart")
+            val quit = JButton("Quit")
+
+            restart.addActionListener { loadLevel(maze, 0) }
+            quit.addActionListener { cards.show(container, "LEVELS") }
+
+            hud.add(levelLabel)
+            hud.add(timerLabel)
+            hud.add(restart)
+            hud.add(quit)
+            add(hud)
+        }
+
+        private fun createVictory() {
+            victory.layout = GridBagLayout()
+            victory.background = Color(0, 0, 0, 160)
+            victory.isVisible = false
+
+            val box = JPanel()
+            box.layout = BoxLayout(box, BoxLayout.Y_AXIS)
+            box.background = Color.WHITE
+            box.border = BorderFactory.createEmptyBorder(20, 40, 20, 40)
+
+            val label = JLabel()
+            label.font = Font("Segoe UI", Font.BOLD, 24)
+            label.alignmentX = Component.CENTER_ALIGNMENT
+
+            val levels = JButton("Level Select")
+            val exit = JButton("Exit")
+
+            levels.addActionListener {
+                victory.isVisible = false
                 cards.show(container, "LEVELS")
-                pack()
             }
 
-            add(quitButton)
+            exit.addActionListener { exitProcess(0) }
+
+            box.add(label)
+            box.add(Box.createRigidArea(Dimension(0, 10)))
+            box.add(levels)
+            box.add(Box.createRigidArea(Dimension(0, 8)))
+            box.add(exit)
+
+            victory.add(box)
+            add(victory)
         }
 
-        fun loadLevel(level: Array<CharArray>) {
+        fun loadLevel(level: Array<CharArray>, num: Int) {
             maze = level.map { it.copyOf() }.toTypedArray()
-            playerRow = 1
-            playerCol = 1
-            revalidate()
+            playerR = 1
+            playerC = 1
+            px = playerC.toDouble()
+            py = playerR.toDouble()
+            animating = false
+            victory.isVisible = false
+            levelLabel.text = "Level $num"
+            startTime = System.currentTimeMillis()
             repaint()
+            requestFocusInWindow()
         }
 
-        override fun doLayout() {
-            super.doLayout()
+        private fun setupKeys() {
+            val im = getInputMap(WHEN_IN_FOCUSED_WINDOW)
+            val am = actionMap
 
-            if (::maze.isInitialized) {
-                val mazeWidth = maze[0].size * tileSize
-                quitButton.setBounds(mazeWidth - 100, 10, 90, 30)
-            }
-        }
-
-        private fun setupKeyBindings() {
-            val inputMap = getInputMap(WHEN_IN_FOCUSED_WINDOW)
-            val actionMap = actionMap
-
-            fun bind(key: String, name: String, action: () -> Unit) {
-                inputMap.put(KeyStroke.getKeyStroke(key), name)
-                actionMap.put(name, object : AbstractAction() {
-                    override fun actionPerformed(e: java.awt.event.ActionEvent?) {
-                        move(action)
-                    }
+            fun bind(k: String, f: () -> Unit) {
+                im.put(KeyStroke.getKeyStroke(k), k)
+                am.put(k, object : AbstractAction() {
+                    override fun actionPerformed(e: java.awt.event.ActionEvent?) = f()
                 })
             }
 
-            bind("W", "up") { move(-1, 0) }
-            bind("UP", "up2") { move(-1, 0) }
-            bind("S", "down") { move(1, 0) }
-            bind("DOWN", "down2") { move(1, 0) }
-            bind("A", "left") { move(0, -1) }
-            bind("LEFT", "left2") { move(0, -1) }
-            bind("D", "right") { move(0, 1) }
-            bind("RIGHT", "right2") { move(0, 1) }
+            bind("W") { move(-1, 0) }
+            bind("UP") { move(-1, 0) }
+            bind("S") { move(1, 0) }
+            bind("DOWN") { move(1, 0) }
+            bind("A") { move(0, -1) }
+            bind("LEFT") { move(0, -1) }
+            bind("D") { move(0, 1) }
+            bind("RIGHT") { move(0, 1) }
         }
 
         override fun move(dr: Int, dc: Int) {
-            val nr = playerRow + dr
-            val nc = playerCol + dc
+            if (animating) return
+
+            val nr = playerR + dr
+            val nc = playerC + dc
+            if (nr !in maze.indices || nc !in maze[0].indices) return
 
             when (maze[nr][nc]) {
                 '#' -> Toolkit.getDefaultToolkit().beep()
-                'E' -> winDialog()
-                else -> {
-                    playerRow = nr
-                    playerCol = nc
-                    repaint()
-                }
+                'E' -> finish()
+                else -> animateMove(nr, nc)
             }
         }
 
-        private fun move(action: () -> Unit) = action()
+        private fun animateMove(nr: Int, nc: Int) {
+            animating = true
+            val sx = px
+            val sy = py
+            val ex = nc.toDouble()
+            val ey = nr.toDouble()
 
-        private fun winDialog() {
-            val option = JOptionPane.showOptionDialog(
-                this,
-                "Level complete!",
-                "Victory",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.INFORMATION_MESSAGE,
-                null,
-                arrayOf("Level Select", "Exit"),
-                "Level Select"
-            )
+            val steps = 10
+            var step = 0
 
-            if (option == 0) {
-                cards.show(container, "LEVELS")
-                pack()
-            } else exitProcess(0)
+            val timer = Timer(16) {
+                step++
+                val t = step / steps.toDouble()
+                px = sx + (ex - sx) * t
+                py = sy + (ey - sy) * t
+                repaint()
+
+                if (step >= steps) {
+                    (it.source as Timer).stop()
+                    playerR = nr
+                    playerC = nc
+                    px = ex
+                    py = ey
+                    animating = false
+                }
+            }
+            timer.start()
+        }
+
+        private fun finish() {
+            val time = (System.currentTimeMillis() - startTime) / 1000
+            val stars = when {
+                time <= 30 -> "★★★"
+                time <= 60 -> "★★"
+                else -> "★"
+            }
+
+            (victory.components[0] as JPanel).components[0].let {
+                (it as JLabel).apply {
+                    font = Font("Dialog", Font.BOLD, 18)
+                    text = "Victory! Time: ${time}s $stars"
+                }
+            }
+
+            victory.isVisible = true
         }
 
         override fun getPreferredSize(): Dimension {
             if (!::maze.isInitialized) return Dimension(600, 400)
-            return Dimension(maze[0].size * tileSize, maze.size * tileSize)
+            return Dimension(maze[0].size * tile, maze.size * tile)
         }
 
         override fun paintComponent(g: Graphics) {
             super.paintComponent(g)
             if (!::maze.isInitialized) return
 
+            val time = (System.currentTimeMillis() - startTime) / 1000
+            timerLabel.text = "Time: ${time}s"
+
+            val g2 = g as Graphics2D
+
             for (r in maze.indices)
                 for (c in maze[r].indices) {
-                    when (maze[r][c]) {
-                        '#' -> g.color = Color.BLACK
-                        'E' -> g.color = Color.RED
-                        else -> g.color = Color.WHITE
+                    g2.color = when (maze[r][c]) {
+                        '#' -> Color(40, 40, 40)
+                        'E' -> Color(200, 60, 60)
+                        else -> Color(240, 240, 240)
                     }
-                    g.fillRect(c * tileSize, r * tileSize, tileSize, tileSize)
-                    g.color = Color.GRAY
-                    g.drawRect(c * tileSize, r * tileSize, tileSize, tileSize)
+                    g2.fillRect(c * tile, r * tile, tile, tile)
                 }
 
-            g.color = Color.GREEN
-            g.fillOval(playerCol * tileSize, playerRow * tileSize, tileSize, tileSize)
+            g2.color = Color(0, 0, 0, 50)
+            g2.fillOval((px * tile).toInt() + 3, (py * tile).toInt() + 3, tile, tile)
+
+            g2.color = Color(60, 200, 90)
+            g2.fillOval((px * tile).toInt(), (py * tile).toInt(), tile, tile)
         }
     }
 
-    private fun level1() = arrayOf(
-        "####################".toCharArray(),
-        "#    #       #     #".toCharArray(),
-        "# ## # ##### # ### #".toCharArray(),
-        "#    #     # #   # #".toCharArray(),
-        "#### ##### # ### # #".toCharArray(),
-        "#        # #     # #".toCharArray(),
-        "# ###### # ##### # #".toCharArray(),
-        "#      #         # #".toCharArray(),
-        "# #### # #######   #".toCharArray(),
-        "##################E#".toCharArray()
-    )
+    private fun generateMaze(w: Int, h: Int): Array<CharArray> {
+        val maze = Array(h) { CharArray(w) { '#' } }
+        val stack = mutableListOf(1 to 1)
+        maze[1][1] = ' '
 
-    private fun level2() = arrayOf(
-        "####################".toCharArray(),
-        "#  ##      #       #".toCharArray(),
-        "# ## # ### # ### ###".toCharArray(),
-        "#    #   #   #     #".toCharArray(),
-        "#### ### ##### ### #".toCharArray(),
-        "#     #     #      #".toCharArray(),
-        "# ### ##### ###  ###".toCharArray(),
-        "#   #       #      #".toCharArray(),
-        "# ### ####### #### #".toCharArray(),
-        "##################E#".toCharArray()
-    )
+        val dirs = listOf(2 to 0, -2 to 0, 0 to 2, 0 to -2)
 
-    private fun level3() = arrayOf(
-        "####################".toCharArray(),
-        "#  #     #   #    ##".toCharArray(),
-        "# ## ### # # ### ###".toCharArray(),
-        "#    #   # #      ##".toCharArray(),
-        "### ###### ###### ##".toCharArray(),
-        "#     #       #   ##".toCharArray(),
-        "# ### ####### ### ##".toCharArray(),
-        "#   #         #   ##".toCharArray(),
-        "# ### ####### ### ##".toCharArray(),
-        "#################E##".toCharArray()
-    )
+        while (stack.isNotEmpty()) {
+            val (r, c) = stack.last()
+            val neighbors = dirs.map { (dr, dc) -> r + dr to c + dc }
+                .filter { (nr, nc) -> nr in 1 until h - 1 && nc in 1 until w - 1 && maze[nr][nc] == '#' }
 
-    private fun level4() = arrayOf(
-        "####################".toCharArray(),
-        "#  #     #   #    ##".toCharArray(),
-        "# ## ### # # ### ###".toCharArray(),
-        "# #  #   # # #    ##".toCharArray(),
-        "# # ###### ###### ##".toCharArray(),
-        "#   #          #  ##".toCharArray(),
-        "# ### ####### ### ##".toCharArray(),
-        "#        #         #".toCharArray(),
-        "# ### ####### #### #".toCharArray(),
-        "##################E#".toCharArray()
-    )
+            if (neighbors.isEmpty()) stack.removeLast()
+            else {
+                val (nr, nc) = neighbors.random()
+                maze[(r + nr) / 2][(c + nc) / 2] = ' '
+                maze[nr][nc] = ' '
+                stack.add(nr to nc)
+            }
+        }
 
-    private fun level5() = arrayOf(
-        "####################".toCharArray(),
-        "#              #  ##".toCharArray(),
-        "# ## ### # ### ### #".toCharArray(),
-        "# ## #   # #   #  ##".toCharArray(),
-        "### ###### # #### ##".toCharArray(),
-        "#   #  #      #   ##".toCharArray(),
-        "# ### ####### ### ##".toCharArray(),
-        "#   #   #          #".toCharArray(),
-        "# ### ####### #### #".toCharArray(),
-        "##################E#".toCharArray()
-    )
+        maze[h - 2][w - 2] = 'E'
+        return maze
+    }
 }
 
 fun main() {
